@@ -2,6 +2,7 @@ from flask import Flask, jsonify
 import pandas as pd
 import requests
 import numpy as np
+from collections import Counter
 
 app = Flask(__name__)
 baseUrl = 'https://baf8-181-237-22-203.ngrok-free.app/api'
@@ -86,6 +87,38 @@ def signup_attempts():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+@app.route("/stores/created_by_day", methods=["GET"])
+def get_stores_created_by_day():
+    """
+    Fetches all stores from the external API and returns a JSON list of
+    { "day_date": "YYYY-MM-DD", "stores_created": <count> }
+    grouped by the date part of `created_at`.
+    """
+    # 1️⃣ Fetch the raw stores list via HTTP
+    try:
+        resp = requests.get("https://baf8-181-237-22-203.ngrok-free.app/api/stores")
+        resp.raise_for_status()
+        stores = resp.json()
+    except requests.RequestException as e:
+        return jsonify({"error": f"Failed to fetch stores: {e}"}), 502
+
+    # 2️⃣ Count how many stores were created on each day
+    counts = Counter()
+    for store in stores:
+        created_at = store.get("created_at", "")
+        if "T" in created_at:
+            day = created_at.split("T")[0]   # "YYYY-MM-DD"
+            counts[day] += 1
+
+    # 3️⃣ Build the result list, sorted by date
+    result = [
+        {"day_date": day, "stores_created": count}
+        for day, count in sorted(counts.items())
+    ]
+
+    return jsonify(result)
 
 
 if __name__ == "__main__":
